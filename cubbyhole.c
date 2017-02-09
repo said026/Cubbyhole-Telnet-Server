@@ -53,7 +53,7 @@ static const char ERROR_MSG[] = "!error: unknown command - try HELP\n";
 static const char GOODBYE_MSG[] = "!goodbye: see you next time\n";
 static const char PUT_OK[] = "!PUT: ok\n";
 static const char DROP_OK[] = "!DROP: ok\n";
-static const char GET_OK[] = "!GET: ";
+static const char GET_OK[] = "!GET:";
 static const char LOOKUP_OK[] = "!LOOKUP: ";
 static const char GET_EMPTY[] = "!GET: No data stored in the server\n";
 static const char LOOKUP_EMPTY[] = "!LOOKUP: No data stored in the server\n";
@@ -176,7 +176,7 @@ int main(int argc, char *argv[]) {
           /* Checking the nature of the command */
           if(strstr(buffer, "PUT") != NULL || strstr(buffer, "put") != NULL)  {
             FILE *fp;
-            fp = fopen ("cubbyhole","ab+");
+            fp = fopen ("storage","w+");
             if (fp == NULL) {
                 fprintf(stderr, "ECHOSERV: Error calling fopen()\n");
                 exit(EXIT_FAILURE);
@@ -195,7 +195,7 @@ int main(int argc, char *argv[]) {
           } else if(strncasecmp(buffer, "GET", 3) == 0)  {
               /* Create a text file to store the message */
               FILE *fp;
-              fp = fopen ("cubbyhole","ab+");
+              fp = fopen ("storage","ab+");
               if (fp == NULL) {
                   fprintf(stderr, "ECHOSERV: Error calling fopen()\n");
                   exit(EXIT_FAILURE);
@@ -223,11 +223,11 @@ int main(int argc, char *argv[]) {
 
               /* clear the contents of the file*/
               fclose (fp);
-              fp = fopen ("cubbyhole","w");
+              fp = fopen ("storage","w");
               fclose (fp);
             } else if(strncasecmp(buffer, "LOOK", 4) == 0)  {
                 FILE *fp;
-                fp = fopen ("cubbyhole","ab+");
+                fp = fopen ("storage","ab+");
                 if (fp == NULL) {
                     fprintf(stderr, "ECHOSERV: Error calling fopen()\n");
                     exit(EXIT_FAILURE);
@@ -254,14 +254,14 @@ int main(int argc, char *argv[]) {
 
           } else if(strncasecmp(buffer, "DROP", 4) == 0)  {
               FILE *fp;
-              fp = fopen ("cubbyhole","ab+");
+              fp = fopen ("storage","ab+");
               if (fp == NULL) {
                   fprintf(stderr, "ECHOSERV: Error calling fopen()\n");
                   exit(EXIT_FAILURE);
               }
               /* clear the contents of the file*/
               fclose (fp);
-              fp = fopen ("cubbyhole","w");
+              fp = fopen ("storage","w");
               fclose (fp);
               Writeline(conn_s, DROP_OK, strlen(DROP_OK));
 
