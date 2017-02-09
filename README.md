@@ -72,3 +72,7 @@ quit
 !goodbye: see you next time
 Connection closed by foreign host.
 ```
+# Licence
+
+Part of the Network Protocols and Architectures at TU Berlin 
+http://www.inet.tu-berlin.de/menue/teaching0/ws201617/npa_1617/parameter/en/
