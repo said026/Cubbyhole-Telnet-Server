@@ -45,14 +45,6 @@ Trying 127.0.0.1...
 Connected to localhost.
 Escape character is '^]'.
 !hello: welcome brave adventurer
-quit
-!goodbye: see you next time
-Connection closed by foreign host.
-said026@said026-ThinkPad-X230 ~ $ telnet localhost 5555
-Trying 127.0.0.1...
-Connected to localhost.
-Escape character is '^]'.
-!hello: welcome brave adventurer
 help
 !help: A cubby hole is a small hiding place where one can hide things.
 !help: We now define the cubby hole protocol that allows users to store
