@@ -270,13 +270,12 @@ int main(int argc, char *argv[]) {
 
           } else if(strncasecmp(buffer, "QUIT", 4) == 0) {
               Writeline(conn_s, GOODBYE_MSG, strlen(GOODBYE_MSG));
-
               /* Close the connected socket */
+              fprintf(stdout, "Client disconnected %s:%d \n", client_ip, client_port);
               if ( close(conn_s) < 0 ) {
                   fprintf(stderr, "ECHOSERV: Error calling close()\n");
                   exit(EXIT_FAILURE);
               }
-              fprintf(stdout, "Client disconnected %s:%d \n", client_ip, client_port);
               exit(EXIT_SUCCESS);
 
           } else {
@@ -287,6 +286,13 @@ int main(int argc, char *argv[]) {
           if (sem_post(sema) < 0) {
             fprintf(stderr, "ECHOSERV: sem_post()\n");
           }
+        }
+      } else {
+        /* Close the connected socket in the parent 
+        socket is under the control of the childs */
+        if ( close(conn_s) < 0 ) {
+            fprintf(stderr, "ECHOSERV: Error calling close()\n");
+            exit(EXIT_FAILURE);
         }
       }
     }
