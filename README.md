@@ -74,5 +74,7 @@ Connection closed by foreign host.
 ```
 # Licence
 
+[![CC0](https://licensebuttons.net/p/zero/1.0/88x31.png)](https://creativecommons.org/publicdomain/zero/1.0/)
+
 Part of the Network Protocols and Architectures at TU Berlin 
 http://www.inet.tu-berlin.de/menue/teaching0/ws201617/npa_1617/parameter/en/
