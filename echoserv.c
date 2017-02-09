@@ -1,14 +1,11 @@
 /*
 
-  ECHOSERV.C
+  Cubbyhole Telnet Server
   ==========
-  (c) Paul Griffiths, 1999
-  Email: mail@paulgriffiths.net
-
-  Simple TCP/IP echo server.
+  Based on the work of Paul Griffiths, 1999
+  http://www.paulgriffiths.net/program/c/echoserv.php
 
 */
-
 
 #include <sys/socket.h>       /*  socket definitions        */
 #include <sys/types.h>        /*  socket types              */
@@ -21,11 +18,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
-
+#include <semaphore.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 
 /*  Global constants  */
 
-#define ECHO_PORT (2002)
+#define DEFAULT_PORT (1337)
 #define MAX_LINE (1024)
 
 static const char HELP_MSG[] = "!help: A cubby hole is a small hiding place where one can hide things.\n"
@@ -54,7 +55,8 @@ static const char PUT_OK[] = "!PUT: ok\n";
 static const char DROP_OK[] = "!DROP: ok\n";
 static const char GET_OK[] = "!GET: ";
 static const char LOOKUP_OK[] = "!LOOKUP: ";
-static const char NEW_LINE = '\n';
+static const char GET_EMPTY[] = "!GET: No data stored in the server\n";
+static const char LOOKUP_EMPTY[] = "!LOOKUP: No data stored in the server\n";
 
 int main(int argc, char *argv[]) {
     int       list_s;                /*  listening socket          */
@@ -76,7 +78,7 @@ int main(int argc, char *argv[]) {
          exit(EXIT_FAILURE);
   	  }
     } else if ( argc < 2 ) {
-      port = ECHO_PORT;
+      port = DEFAULT_PORT;
     } else {
 	     fprintf(stderr, "ECHOSERV: Invalid arguments.\n");
        exit(EXIT_FAILURE);
@@ -88,7 +90,6 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "ECHOSERV: Error creating listening socket.\n");
       exit(EXIT_FAILURE);
     }
-
 
     /*  Set all bytes in socket address structure to
         zero, and fill in the relevant data members   */
@@ -119,10 +120,25 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "ECHOSERV: Error calling listen()\n");
       exit(EXIT_FAILURE);
     }
+    /* Place a semaphore in a shared memory */
+
+    sem_t *sema = mmap(NULL, sizeof(*sema),
+                       PROT_READ |PROT_WRITE,MAP_SHARED|MAP_ANONYMOUS,-1, 0);
+
+    if (sema == MAP_FAILED) {
+      perror("mmap");
+      exit(EXIT_FAILURE);
+    }
+
+    /* Create/initialize the semaphore */
+    if ( sem_init(sema, 1, 1) < 0) {
+      perror("sem_init");
+      exit(EXIT_FAILURE);
+    }
 
     /*  Enter an infinite loop to respond
         to client requests and echo input  */
-    fprintf(stdout, "Server started, listenting for clients ...\n");
+    fprintf(stdout, "Server started, listenting for clients on port %d...\n", port);
     while (1) {
 
 	    /*  Wait for a connection, then accept() it  */
@@ -148,8 +164,14 @@ int main(int argc, char *argv[]) {
       if (pid == 0) {
         Writeline(conn_s, WELCOME_MSG, strlen(WELCOME_MSG));
         while (1) {
+
           /* Read the command from the client */
           Readline(conn_s, buffer, MAX_LINE-1);
+
+          /* Unlock the semaphore*/
+          if (sem_wait(sema) < 0) {
+            fprintf(stderr, "ECHOSERV: Error calling sem_wait()\n");
+          }
 
           /* Checking the nature of the command */
           if(strstr(buffer, "PUT") != NULL || strstr(buffer, "put") != NULL)  {
@@ -164,93 +186,120 @@ int main(int argc, char *argv[]) {
             /* write the message to the text file */
             toStore = strchr(buffer, ' ');
             if (strlen(toStore) == 0) {
+              /* If nothing to store */
               break;
             }
             fprintf (fp, toStore);
             Writeline(conn_s, PUT_OK, strlen(PUT_OK));
             fclose (fp);
           } else if(strncasecmp(buffer, "GET", 3) == 0)  {
-            /* Create a text file to store the message */
-            FILE *fp;
-            fp = fopen ("cubbyhole","ab+");
-            if (fp == NULL) {
-                fprintf(stderr, "ECHOSERV: Error calling fopen()\n");
-                exit(EXIT_FAILURE);
-            }
-            /* get the content from the file */
-            char fromFile[MAX_LINE + 1];
-            if (fp != NULL) {
-                size_t newLen = fread(fromFile, sizeof(char), MAX_LINE, fp);
-                fseek (fp, 0, SEEK_END);
-                int size = ftell(fp);
-                if ((ferror(fp) != 0) && (size != 0)) {
-                    fprintf(stderr, "ECHOSERV : Error reading file\n");
-                } else {
-                    fromFile[newLen++] = '\0'; /* Just to be safe. */
-                }
-            }
-            Writeline(conn_s, GET_OK, strlen(GET_OK));
-            Writeline(conn_s, fromFile, strlen(fromFile));
+              /* Create a text file to store the message */
+              FILE *fp;
+              fp = fopen ("cubbyhole","ab+");
+              if (fp == NULL) {
+                  fprintf(stderr, "ECHOSERV: Error calling fopen()\n");
+                  exit(EXIT_FAILURE);
+              }
+              /* get the content from the file */
+              char fromFile[MAX_LINE + 1];
+              if (fp != NULL) {
+                  size_t newLen = fread(fromFile, sizeof(char), MAX_LINE, fp);
+                  fseek (fp, 0, SEEK_END);
+                  int size = ftell(fp);
+                  if ((ferror(fp) != 0) && (size != 0)) {
+                      fprintf(stderr, "ECHOSERV : Error reading file\n");
+                  } else {
+                      fromFile[newLen++] = '\0'; /* Just to be safe. */
+                  }
+              }
 
-            /* clear the contents of the file*/
-            fclose (fp);
-            fp = fopen ("cubbyhole","w");
-            fclose (fp);
-          } else if(strncasecmp(buffer, "LOOK", 4) == 0)  {
-            FILE *fp;
-            fp = fopen ("cubbyhole","ab+");
-            if (fp == NULL) {
-                fprintf(stderr, "ECHOSERV: Error calling fopen()\n");
-                exit(EXIT_FAILURE);
-            }
-            /* get the content from the file */
-            char fromFile[MAX_LINE + 1];
-            if (fp != NULL) {
-                size_t newLen = fread(fromFile, sizeof(char), MAX_LINE, fp);
-                fseek (fp, 0, SEEK_END);
-                int size = ftell(fp);
-                if ((ferror(fp) != 0) && (size != 0)) {
-                    fprintf(stderr, "ECHOSERV : Error reading file\n");
-                } else {
-                    fromFile[newLen++] = '\0'; /* Just to be safe. */
+              /* Check if the content is empty*/
+              if ((fromFile != NULL) && (fromFile[0] == '\0')) {
+                Writeline(conn_s, GET_EMPTY, strlen(GET_EMPTY));
+              } else {
+                Writeline(conn_s, GET_OK, strlen(GET_OK));
+                Writeline(conn_s, fromFile, strlen(fromFile));
+              }
+
+              /* clear the contents of the file*/
+              fclose (fp);
+              fp = fopen ("cubbyhole","w");
+              fclose (fp);
+            } else if(strncasecmp(buffer, "LOOK", 4) == 0)  {
+                FILE *fp;
+                fp = fopen ("cubbyhole","ab+");
+                if (fp == NULL) {
+                    fprintf(stderr, "ECHOSERV: Error calling fopen()\n");
+                    exit(EXIT_FAILURE);
                 }
-            }
-            Writeline(conn_s, LOOKUP_OK, strlen(LOOKUP_OK));
-            Writeline(conn_s, fromFile, strlen(fromFile));
+                /* get the content from the file */
+                char fromFile[MAX_LINE + 1];
+                if (fp != NULL) {
+                    size_t newLen = fread(fromFile, sizeof(char), MAX_LINE, fp);
+                    fseek (fp, 0, SEEK_END);
+                    int size = ftell(fp);
+                    if ((ferror(fp) != 0) && (size != 0)) {
+                        fprintf(stderr, "ECHOSERV : Error reading file\n");
+                    } else {
+                        fromFile[newLen++] = '\0'; /* Just to be safe. */
+                    }
+                }
+                /* Check if the content is empty*/
+                if ((fromFile != NULL) && (fromFile[0] == '\0')) {
+                  Writeline(conn_s, LOOKUP_EMPTY, strlen(LOOKUP_EMPTY));
+                } else {
+                  Writeline(conn_s, LOOKUP_OK, strlen(LOOKUP_OK));
+                  Writeline(conn_s, fromFile, strlen(fromFile));
+                }
 
           } else if(strncasecmp(buffer, "DROP", 4) == 0)  {
-            FILE *fp;
-            fp = fopen ("cubbyhole","ab+");
-            if (fp == NULL) {
-                fprintf(stderr, "ECHOSERV: Error calling fopen()\n");
-                exit(EXIT_FAILURE);
-            }
-            /* clear the contents of the file*/
-            fclose (fp);
-            fp = fopen ("cubbyhole","w");
-            fclose (fp);
-            Writeline(conn_s, DROP_OK, strlen(DROP_OK));
+              FILE *fp;
+              fp = fopen ("cubbyhole","ab+");
+              if (fp == NULL) {
+                  fprintf(stderr, "ECHOSERV: Error calling fopen()\n");
+                  exit(EXIT_FAILURE);
+              }
+              /* clear the contents of the file*/
+              fclose (fp);
+              fp = fopen ("cubbyhole","w");
+              fclose (fp);
+              Writeline(conn_s, DROP_OK, strlen(DROP_OK));
 
           } else if(strncasecmp(buffer, "HELP", 4) == 0)  {
-            Writeline(conn_s, HELP_MSG, strlen(HELP_MSG));
+              Writeline(conn_s, HELP_MSG, strlen(HELP_MSG));
 
           } else if(strncasecmp(buffer, "QUIT", 4) == 0) {
-            Writeline(conn_s, GOODBYE_MSG, strlen(GOODBYE_MSG));
-            exit(EXIT_SUCCESS);
+              Writeline(conn_s, GOODBYE_MSG, strlen(GOODBYE_MSG));
+
+              /* Close the connected socket */
+              if ( close(conn_s) < 0 ) {
+                  fprintf(stderr, "ECHOSERV: Error calling close()\n");
+                  exit(EXIT_FAILURE);
+              }
+              fprintf(stdout, "Client disconnected %s:%d \n", client_ip, client_port);
+              exit(EXIT_SUCCESS);
 
           } else {
-            Writeline(conn_s, ERROR_MSG, strlen(ERROR_MSG));
+            /* If command not recognized */
+              Writeline(conn_s, ERROR_MSG, strlen(ERROR_MSG));
           }
-          /* Writeline(conn_s, buffer, strlen(buffer)); */
-        }
-
-      } else {
-         /* We are the parent process, but child couldn't be created
-            close the connected socket */
-        if ( close(conn_s) < 0 ) {
-            fprintf(stderr, "ECHOSERV: Error calling close()\n");
-            exit(EXIT_FAILURE);
+          /* Child unlocks semaphore */
+          if (sem_post(sema) < 0) {
+            fprintf(stderr, "ECHOSERV: sem_post()\n");
+          }
         }
       }
+    }
+
+    /* Delete the semaphore */
+    if (sem_destroy(sema) < 0) {
+      fprintf(stderr, "ECHOSERV: sem_destroy failed\n");
+      exit(EXIT_FAILURE);
+    }
+
+    if (munmap(sema, sizeof(sema)) < 0) {
+      perror("munmap failed");
+      fprintf(stderr, "ECHOSERV: munmap failed\n");
+      exit(EXIT_FAILURE);
     }
 }
