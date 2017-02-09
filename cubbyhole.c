@@ -272,12 +272,11 @@ int main(int argc, char *argv[]) {
               Writeline(conn_s, GOODBYE_MSG, strlen(GOODBYE_MSG));
               /* Close the connected socket */
               fprintf(stdout, "Client disconnected %s:%d \n", client_ip, client_port);
-              if ( close(conn_s) < 0 ) {
-                  fprintf(stderr, "ECHOSERV: Error calling close()\n");
-                  exit(EXIT_FAILURE);
+              /* Child unlocks semaphore */
+              if (sem_post(sema) < 0) {
+                fprintf(stderr, "ECHOSERV: sem_post()\n");
               }
               exit(EXIT_SUCCESS);
-
           } else {
             /* If command not recognized */
               Writeline(conn_s, ERROR_MSG, strlen(ERROR_MSG));
@@ -288,7 +287,7 @@ int main(int argc, char *argv[]) {
           }
         }
       } else {
-        /* Close the connected socket in the parent 
+        /* Close the connected socket in the parent
         socket is under the control of the childs */
         if ( close(conn_s) < 0 ) {
             fprintf(stderr, "ECHOSERV: Error calling close()\n");
