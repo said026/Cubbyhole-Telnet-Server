@@ -12,7 +12,7 @@ terminated with a newline. The following commands should be supported:
 - `QUIT` Terminates the connection.
 
 The server greets any new client with `!HELLO: <text>`. After that, the server answers each command
-with `!<command>:` ok or `!<command>: <text>`. e.g. the command `pUt hello` world is answered
+with `!<command>:` ok or `!<command>: <text>`. e.g. the command `pUt hello world` is answered
 with `!PUT: ok` and get is answered with `!GET: hello world`.
 
 ## Install
